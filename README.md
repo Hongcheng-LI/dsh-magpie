@@ -11,7 +11,7 @@ GLM / OpenCode Zen / Codex 等订阅账号统一成 OpenAI 兼容接口。它自
 **安装**（DSH 内或终端）：
 
 ```powershell
-dsh plugin --profile desktop add github:lhc33/dsh-magpie
+dsh plugin --profile desktop add github:Hongcheng-LI/dsh-magpie
 ```
 
 ![当天周期](docs/preview-1d.png)
