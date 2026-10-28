@@ -14,6 +14,20 @@ GLM / OpenCode Zen / Codex 等订阅账号统一成 OpenAI 兼容接口。它自
 dsh plugin --profile desktop add github:Hongcheng-LI/dsh-magpie
 ```
 
+> 要求：本机运行 [Magpie](https://magpie.bot)（默认端口 3425，可用环境变量 `MAGPIE_URL` 覆盖）。
+> 只改 `dsh/client.js` 时刷新页面即生效；改 `dsh/index.js` 后需重启 DSH。
+
+## 特性一览
+
+- 徽章 + 双栏面板：左栏用量（当天/7天/30天/全部可切换），右栏 Codex 风格额度清单
+- 支持三种结算口径：订阅积分、按量估值（≈）、预充值实扣（DeepSeek 等余额账号）
+- 第三方中转站（new-api / one-api 等）在 Magpie 侧配好 `balance` 探测即自动显示余额
+- 窗口名自动翻译（`5 hours` → `5 小时用量上限`），重置卡按「种类 + 到期日」归组
+- 免费账号自动标注（plan 含 Free 或插件内置名单）
+- 读取失败的账号排在最前并给出可执行的原因（如「API key 无效（401）」）
+- 配色按钮：跟随 DSH → 浅色 → 深色，偏好记忆在 localStorage
+- 60s 自动刷新 + 手动刷新；主题令牌取自 DSH 自身，浅深色自适应
+
 ![当天周期](docs/preview-1d.png)
 
 ## 形态
