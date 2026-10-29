@@ -1,0 +1,49 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [22]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+
+      - name: Syntax check both halves
+        run: |
+          node --check dsh/index.js
+          node --check dsh/client.js
+
+      - name: Run the test suite
+        run: node --test tests/
+
+      - name: Lint the manifest
+        run: |
+          node -e "
+            const pkg = require('./package.json');
+            const need = ['name', 'version', 'type', 'exports', 'dsh'];
+            for (const k of need) {
+              if (!pkg[k]) { console.error('package.json is missing: ' + k); process.exit(1); }
+            }
+            if (!pkg.dsh.bundle || !pkg.dsh.client) {
+              console.error('package.json dsh block must declare bundle and client');
+              process.exit(1);
+            }
+            if (pkg.type !== 'module') {
+              console.error('the host half is ESM: type must be \"module\"');
+              process.exit(1);
+            }
+            console.log('manifest ok:', pkg.name + '@' + pkg.version);
+          "
