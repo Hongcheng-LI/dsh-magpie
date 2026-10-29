@@ -6,6 +6,15 @@ All notable changes to this plugin are recorded here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- The 当天 tab of the usage panel now reads Magpie's own `period=today` aggregate
+  endpoint (which returns both the top-line totals and the per-provider/model
+  breakdown in one payload), instead of walking the raw request log by hand and
+  re-aggregating. The two numbers previously disagreed because the log walk counted
+  failed/retry and unpriced requests differently from Magpie's dashboard; now the
+  plugin matches the dashboard exactly.
+
 ## [0.3.3] — 2026-10-29
 
 ### Changed

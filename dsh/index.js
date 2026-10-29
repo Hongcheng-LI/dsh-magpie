@@ -307,95 +307,24 @@ export function apply(ctx) {
   ctx.timer.timeout(warm, 150);
 
   // ---- usage half (per-model 用量) ------------------------------------------
-  // Magpie's aggregate endpoint understands period=7d/30d/all but not 1d, and it
-  // cannot split the per-model list by day. For the 当天 tab the host therefore
-  // takes today's bucket from the daily series (top-line numbers) and re-aggregates
-  // today's requests (paginated rows, newest first) into a per-model list.
+  // Every tab talks to Magpie's own aggregate endpoint with the same period param
+  // Magpie's dashboard uses, so our numbers match its 用量 page exactly. The 当天 tab
+  // maps to Magpie's native "today" period (a single payload carrying both the top-line
+  // totals and the per-provider/model breakdown). No manual request-log walking: that
+  // produced a different total than Magpie's dashboard and is no longer needed.
   const USAGE_PERIODS = new Set(["1d", "7d", "30d", "all"]);
+  const MAGPIE_PERIOD = { "1d": "today", "7d": "7d", "30d": "30d", all: "all" };
   const usageCaches = new Map(); // period -> { at, payload }
-
-  function localMidnightMs() {
-    const d = new Date();
-    d.setHours(0, 0, 0, 0);
-    return d.getTime();
-  }
-
-  function localDayKey(ms) {
-    const d = new Date(ms);
-    return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
-  }
-
-  function rowTs(r) {
-    const n = Date.parse(String((r && r.t) || ""));
-    return isFinite(n) ? n : NaN;
-  }
-
-  async function loadUsageDay() {
-    const midMs = localMidnightMs();
-    const key = localDayKey(midMs);
-    const agg = await fetchJson(ctx, base + "/v1/magpie/usage");
-    const series = Array.isArray(agg && agg.series) ? agg.series : [];
-    let bucket = null;
-    for (const s of series) {
-      const ts = Date.parse(String((s && s.time) || ""));
-      if (isFinite(ts) ? ts >= midMs : String((s && s.time) || "").slice(0, 10) === key) bucket = s;
-    }
-    const totals = pickNumbers(bucket || {}, USAGE_NUM_KEYS);
-    // Per-model: walk the requests log (newest first) with `offset` — Magpie ignores
-    // `page`. Timestamps come back in mixed shapes ("…+08:00" and "…Z") and rows are
-    // only roughly time-ordered, so keep draining pages while a page still holds any
-    // of today's rows and stop once one page has none.
-    const byKey = new Map();
-    // Overall time budget: on chatty days this can walk a hundred+ pages serially;
-    // cap the work so the panel never waits for the full crawl.
-    const deadline = Date.now() + 10_000;
-    for (let off = 0; off < 20000; off += 100) {
-      if (off > 0 && Date.now() > deadline) break;
-      const res = await fetchJson(ctx, base + "/v1/magpie/usage/requests?period=7d&offset=" + off + "&pageSize=100");
-      const rows = res && Array.isArray(res.rows) ? res.rows : [];
-      if (!rows.length) break;
-      let anyInDay = false;
-      for (const r of rows) {
-        const ts = rowTs(r);
-        const inDay = isFinite(ts) ? ts >= midMs : String((r && r.t) || "").slice(0, 10) >= key;
-        if (!inDay) continue;
-        anyInDay = true;
-        const id = String((r && (r.req || r.model)) || "?");
-        let m = byKey.get(id);
-        if (!m) {
-          m = {
-            id,
-            provider: r.provider,
-            model: r.model,
-            name: r.model || "?",
-            sub: [r.providerName, r.host].filter(Boolean).join(" · "),
-            calls: 0, errors: 0, input: 0, output: 0, cache_read: 0, cost: 0, unpriced: 0,
-          };
-          byKey.set(id, m);
-        }
-        m.calls += 1;
-        if (Number(r.status) >= 400) m.errors += 1;
-        m.input += Number(r.in) || 0;
-        m.output += Number(r.out) || 0;
-        m.cache_read += Number(r.cache_read) || 0;
-        if (r.priced === false) m.unpriced += 1;
-        else m.cost += Number(r.cost) || 0;
-      }
-      if (!anyInDay) break;
-    }
-    const models = Array.from(byKey.values()).sort((a, b) => (b.cost - a.cost) || (b.calls - a.calls));
-    return { period: "1d", since: key, totals, models, agents: [] };
-  }
 
   async function loadUsage(force, period) {
     const p = USAGE_PERIODS.has(period) ? period : "30d";
     const now = Date.now();
     const hit = usageCaches.get(p);
     if (!force && hit && now - hit.at < USAGE_TTL_MS) return hit.payload;
-    const norm = p === "1d"
-      ? await loadUsageDay()
-      : normalizeUsage(await fetchJson(ctx, base + "/v1/magpie/usage?period=" + encodeURIComponent(p)));
-    const payload = Object.assign({ ok: true, base, fetchedAt: new Date().toISOString() }, norm);
+    const norm = normalizeUsage(
+      await fetchJson(ctx, base + "/v1/magpie/usage?period=" + encodeURIComponent(MAGPIE_PERIOD[p]))
+    );
+    const payload = Object.assign({ ok: true, base, fetchedAt: new Date().toISOString() }, norm, { period: p });
     usageCaches.set(p, { at: Date.now(), payload });
     return payload;
   }
