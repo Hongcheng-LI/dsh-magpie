@@ -75,7 +75,7 @@ test.after(() => {
 });
 
 test("module announces the intended identity and dependencies", () => {
-  assert.equal(name, "dsh-magpie");
+  assert.equal(name, "dsh-magpie-quota");
   assert.deepEqual(inject, ["subprocess", "timer"]);
 });
 

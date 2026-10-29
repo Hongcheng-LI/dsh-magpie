@@ -6,6 +6,15 @@ All notable changes to this plugin are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.3.3] — 2026-10-29
+
+### Changed
+
+- Published to npm as **`dsh-magpie-quota`** (the bare `dsh-magpie` name was already
+  taken by an unrelated placeholder package). Plugin ids inside the package were
+  renamed to match, so `dsh plugin add dsh-magpie-quota` installs the same plugin as
+  `dsh plugin add github:Hongcheng-LI/dsh-magpie`.
+
 ## [0.3.2] — 2026-10-29
 
 ### Fixed

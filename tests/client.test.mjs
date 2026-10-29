@@ -65,8 +65,8 @@ async function loadClient() {
     localStorage: { getItem: () => null, setItem: () => {} },
   };
   await import(pathToFileURL(CLIENT).href);
-  const config = loaded.find((c) => c && c.id === "dsh-magpie");
-  assert.ok(config, "client bundle registers itself as dsh-magpie via __ModuleLoader__.load");
+  const config = loaded.find((c) => c && c.id === "dsh-magpie-quota");
+  assert.ok(config, "client bundle registers itself as dsh-magpie-quota via __ModuleLoader__.load");
   const mod = config.factory(() => ({}));
   return mod;
 }

@@ -16,7 +16,7 @@
 // <body> puts the panel in true viewport coordinates at normal scale.
 
 window.__ModuleLoader__.load({
-  id: "dsh-magpie",
+  id: "dsh-magpie-quota",
   factory: (require) => {
     var module = { exports: {} };
     var exports = module.exports;
@@ -892,13 +892,13 @@ window.__ModuleLoader__.load({
     function apply(ctx) {
       const slots = ctx.slots;
       if (!slots || typeof slots.inject !== "function") {
-        console.log("[dsh-magpie-client] skip: slots service unavailable");
+        console.log("[dsh-magpie-quota-client] skip: slots service unavailable");
         return;
       }
       const timer = ctx.timer;
       slots.inject("conversation.input.right", function* () {
         yield slots.register(
-          { name: "conversation.input.right", id: "dsh-magpie", order: 0, label: "dsh-magpie" },
+          { name: "conversation.input.right", id: "dsh-magpie-quota", order: 0, label: "dsh-magpie-quota" },
           (props) => StatusPill(props, timer)
         );
       });

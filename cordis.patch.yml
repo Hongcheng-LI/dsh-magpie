@@ -1,7 +1,7 @@
-# dsh bundle layer: mount the dsh-magpie plugin.
+# dsh bundle layer: mount the dsh-magpie-quota plugin.
 # Host half = package root export (./dsh/index.js, registers GET /magpie/quotas
 # on the DSH web server). Browser half loads via the ./client export declared
 # by the dsh.client manifest in package.json.
 - insert:
-    - id: dsh-magpie
-      name: dsh-magpie
+    - id: dsh-magpie-quota
+      name: dsh-magpie-quota

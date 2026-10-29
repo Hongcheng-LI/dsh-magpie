@@ -1,4 +1,4 @@
-// dsh/index.js — dsh-magpie host half (bundle form).
+// dsh/index.js — dsh-magpie-quota host half (bundle form).
 //
 // Responsibility: read the local Magpie AI gateway's quota API and expose it to
 // the DSH web UI on a same-origin route.
@@ -13,7 +13,7 @@
 // Zero configuration: the Magpie port defaults to 3425 (override with the
 // MAGPIE_URL environment variable, e.g. MAGPIE_URL=http://127.0.0.1:4000).
 
-export const name = "dsh-magpie";
+export const name = "dsh-magpie-quota";
 export const inject = ["subprocess", "timer"];
 
 const DEFAULT_BASE = "http://127.0.0.1:3425";
@@ -284,7 +284,7 @@ export function apply(ctx) {
     cache = { at: Date.now(), payload };
     if (!firstLogged) {
       firstLogged = true;
-      console.log("[dsh-magpie] first fetch ok: " + payload.providers.length + " providers @ " + base);
+      console.log("[dsh-magpie-quota] first fetch ok: " + payload.providers.length + " providers @ " + base);
     }
     return payload;
   }
@@ -422,7 +422,7 @@ export function apply(ctx) {
     ctx.inject(["webServer"], (scope) => {
       const register = (path, loader) =>
         scope.webServer.register({
-          name: "dsh-magpie" + (path === "/magpie/quotas" ? "" : "-usage"),
+          name: "dsh-magpie-quota" + (path === "/magpie/quotas" ? "" : "-usage"),
           kind: "exact",
           path,
           handler: async (req, res) => {
@@ -450,9 +450,9 @@ export function apply(ctx) {
       try {
         register("/magpie/quotas", loadSafe);
         register("/magpie/usage", loadUsageSafe);
-        console.log("[dsh-magpie] routes GET /magpie/quotas + /magpie/usage registered (base " + base + ")");
+        console.log("[dsh-magpie-quota] routes GET /magpie/quotas + /magpie/usage registered (base " + base + ")");
       } catch (e) {
-        console.error("[dsh-magpie] route registration failed: " + ((e && e.stack) || e));
+        console.error("[dsh-magpie-quota] route registration failed: " + ((e && e.stack) || e));
       }
     });
   }
