@@ -27,7 +27,7 @@ jobs:
           node --check dsh/client.js
 
       - name: Run the test suite
-        run: node --test tests/
+        run: node --test tests/client.test.mjs tests/host.test.mjs
 
       - name: Lint the manifest
         run: |

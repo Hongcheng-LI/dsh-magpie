@@ -21,7 +21,7 @@ which is a valid thing to test.
 
 ```bash
 node --check dsh/index.js && node --check dsh/client.js
-node --test tests/
+node --test tests/client.test.mjs tests/host.test.mjs
 ```
 
 Both suites are offline: the client tests stub `document` / `__ModuleLoader__`,

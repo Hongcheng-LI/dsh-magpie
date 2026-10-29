@@ -155,7 +155,7 @@ dsh plugin --profile desktop add "<本目录的绝对路径>"
 
 ```bash
 node --check dsh/index.js && node --check dsh/client.js   # 语法
-node --test tests/                                        # 15 项断言，全离线
+node --test tests/client.test.mjs tests/host.test.mjs                                        # 15 项断言，全离线
 node scripts/preview.mjs                                  # 出 preview.html，浏览器直接打开
 ```
 
