@@ -1,5 +1,10 @@
 # dsh-magpie
 
+[![CI](https://github.com/Hongcheng-LI/dsh-magpie/actions/workflows/ci.yml/badge.svg)](https://github.com/Hongcheng-LI/dsh-magpie/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![DSH plugin](https://img.shields.io/badge/DSH-plugin-6f42c1)](https://dshmarketplace.dev)
+[![node](https://img.shields.io/badge/node-%E2%89%A522-339933)](package.json)
+
 在 DSH 输入框里一眼看到 **Magpie 全部接入账号的额度**。
 
 ![面板预览](docs/preview-light.png)
@@ -140,26 +145,42 @@ magpie provider set my-relay balance.path='(1 - credits.monthlyCredits / 70) %'
 ## 安装（本地开发形态）
 
 ```powershell
-dsh plugin --profile desktop add "C:/Vibe_Coding/AI额度插件/dsh-magpie"
+dsh plugin --profile desktop add "<本目录的绝对路径>"
 # 已实测：会自动写入 dsh.profile.bundles，并把包以 link: 方式挂进 profile 的 node_modules
 ```
 
 然后把 DSH 页面刷新一次（或重启 DSH）即可看到输入框右侧的徽章。
 
-## 自检
+## 开发与测试
+
+```bash
+node --check dsh/index.js && node --check dsh/client.js   # 语法
+node --test tests/                                        # 15 项断言，全离线
+node scripts/preview.mjs                                  # 出 preview.html，浏览器直接打开
+```
+
+两套测试都不需要 Magpie 也不需要 DSH：`tests/client.test.mjs` 用桩 `document` /
+`window.__ModuleLoader__` 加载真实 `dsh/client.js`，断言徽章文案、窗口名翻译、重置卡分组、
+免费账号标记、余额行、错误态与字号；`tests/host.test.mjs` 用桩内核 + 桩 `globalThis.fetch`
+驱动 `dsh/index.js`，断言信任校验、quota 归一化、周期透传与降级。CI 见
+`.github/workflows/ci.yml`（Node 22，语法 + 测试 + manifest 校验）。
+
+## 自检（对着运行中的 DSH）
 
 ```powershell
-# host 半边（不需要登录 token）。端口每次重启 DSH 都会变，用当前页面地址栏里的端口
-curl.exe --noproxy '*' http://127.0.0.1:8254/magpie/quotas
+# host 半边不需要登录 token。端口每次重启 DSH 都会变，取当前页面地址栏里的端口
+curl.exe --noproxy '*' http://127.0.0.1:<当前端口>/magpie/quotas
 ```
 
 ## 离线预览（不用开 DSH 也能看样式）
 
 ```powershell
-node render-preview.cjs   # 用真实 Magpie 数据渲染 preview.light.html / preview.dark.html / preview.forced.html / preview.1d.html
-# 再用 Chrome headless 截图，或直接浏览器打开这几个 html（forced = 深色页面上强制浅色卡片，用来验证「配色」按钮；
-# 1d = 「当天」周期的样子）。预览直接 import dsh/index.js 调真实 handler，所以数字与线上一致，不需要先重启 DSH。
+node scripts/preview.mjs [输出路径]
 ```
+
+用真实 Magpie 数据渲染一个自包含的 `preview.html`（内置 CSS），浏览器直接打开即可；
+Magpie 没开时渲染的是「连不上 Magpie」离线态，也值得看一眼。想看「当天」周期就改脚本里的
+`usagePeriod`。
 
 > 备注：`/v1/magpie/usage/requests` 的分页参数是 `offset`（不是 `page`，Magpie 会忽略 `page` 并重复返回第一页）；
 > 行时间戳混着 `+08:00` 与 `Z` 两种写法，比较前一律 `Date.parse` 成时间戳。当日按模型榜就是靠这个逐页取到当天零点为止。
