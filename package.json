@@ -1,18 +1,33 @@
 {
   "name": "dsh-magpie",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "All provider quotas and prepaid balances from your local Magpie AI gateway (127.0.0.1:3425) inside the DSH composer: per-window usage bars, remaining percent, reset countdowns, and money-balance accounts.",
   "type": "module",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Hongcheng-LI/dsh-magpie.git"
+  },
+  "homepage": "https://github.com/Hongcheng-LI/dsh-magpie#readme",
+  "bugs": {
+    "url": "https://github.com/Hongcheng-LI/dsh-magpie/issues"
+  },
   "files": [
     "dsh",
     "cordis.patch.yml",
-    "README.md"
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md"
   ],
   "exports": {
     ".": "./dsh/index.js",
     "./client": "./dsh/client.js",
     "./package.json": "./package.json"
+  },
+  "scripts": {
+    "test": "node --test tests/",
+    "check": "node --check dsh/index.js && node --check dsh/client.js",
+    "preview": "node scripts/preview.mjs"
   },
   "dsh": {
     "bundle": {
@@ -31,5 +46,8 @@
     "magpie",
     "quota",
     "balance"
-  ]
+  ],
+  "engines": {
+    "node": ">=22"
+  }
 }
