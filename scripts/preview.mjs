@@ -90,22 +90,59 @@ async function loadClient() {
 
 const mod = await loadClient();
 
+/**
+ * Run the real host half in-process so the preview is fed the exact payload DSH
+ * serves — including the normalised pct / balance / resets fields. Reading
+ * /v1/magpie/quotas straight from Magpie would hand the panel raw entries
+ * (no `pct`), and every row would render as "—".
+ */
+async function hostPayload(period) {
+  process.env.MAGPIE_URL = BASE;
+  const mod = await import(new URL("../dsh/index.js", import.meta.url).href);
+  const routes = new Map();
+  mod.apply({
+    inject(_deps, fn) {
+      fn({ webServer: { register(o) { routes.set(o.path, o.handler); } } });
+    },
+    timer: { interval: () => () => {}, timeout: () => () => {} },
+    effect: () => {},
+  });
+  if (!routes.size) throw new Error("host half did not register a web handler");
+  async function call(routePath, query) {
+    const handler = routes.get(routePath);
+    if (!handler) throw new Error(`host half registered no route ${routePath}`);
+    const req = {
+      url: routePath + (query || ""),
+      method: "GET",
+      headers: { host: "127.0.0.1:65535", "sec-fetch-site": "same-origin" },
+    };
+    const res = {
+      statusCode: 200,
+      headers: {},
+      body: "",
+      setHeader(k, v) { this.headers[k.toLowerCase()] = v; },
+      getHeader(k) { return this.headers[k.toLowerCase()]; },
+      writeHead(code, h) { this.statusCode = code; Object.assign(this.headers, h || {}); },
+      end(chunk) { if (chunk != null) this.body = String(chunk); },
+    };
+    await handler(req, res);
+    const json = JSON.parse(res.body || "{}");
+    if (!json.ok) throw new Error(json.message || `host returned HTTP ${res.statusCode}`);
+    return json;
+  }
+  return {
+    quotas: await call("/magpie/quotas"),
+    usage: await call("/magpie/usage", "?period=" + period),
+  };
+}
+
 let payload;
 let usage;
 let offline = null;
 try {
-  const [quotas, usageBody] = await Promise.all([
-    getJson(`${BASE}/v1/magpie/quotas`),
-    getJson(`${BASE}/v1/magpie/usage`),
-  ]);
-  payload = {
-    ok: true,
-    base: BASE,
-    version: quotas.version || quotas.build || null,
-    fetchedAt: new Date().toISOString(),
-    providers: Array.isArray(quotas.data) ? quotas.data : [],
-  };
-  usage = { ok: true, period: "30d", ...usageBody };
+  const host = await hostPayload("30d");
+  payload = host.quotas;
+  usage = host.usage;
 } catch (err) {
   offline = err.message;
   payload = { ok: false, message: offline, base: BASE, providers: [] };
@@ -115,36 +152,46 @@ try {
 const state = { data: payload, usage, error: offline, loading: false, loadedAt: Date.now(), usagePeriod: "30d" };
 const panelHtml = mod.__debug_panelHtml(state);
 
-// ensureStyles() writes into a <style> node; capture whatever it injected.
+// ensureStyles() writes the whole stylesheet into a <style> node's textContent, but only
+// when no node with STYLE_ID exists yet. Re-load client.js in a throwaway context whose
+// document.createElement hands back a node that records textContent, then call its
+// exported __debug_styles() to make it build the sheet.
 const styles = [];
-const realCreate = () => {
-  const el = {
-    dataset: {},
-    style: {},
-    textContent: "",
-    setAttribute() {},
-    appendChild() {},
-  };
+const makeStyleEl = () => {
+  const el = { dataset: {}, style: {}, setAttribute() {}, appendChild() {} };
   Object.defineProperty(el, "textContent", {
     get: () => "",
     set: (v) => styles.push(String(v)),
   });
   return el;
 };
-const probeSandbox = {
-  document: { getElementById: () => null, createElement: realCreate, head: { appendChild() {} }, body: { appendChild() {} } },
-  window: { __ModuleLoader__: { load: () => {} }, localStorage: { getItem: () => null, setItem() {} } },
+const s2 = {
   console,
   Date,
   Math,
   JSON,
+  localStorage: { getItem: () => null, setItem() {} },
+  document: {
+    getElementById: () => null,
+    createElement: makeStyleEl,
+    head: { appendChild() {} },
+    body: { appendChild() {} },
+    addEventListener() {},
+    removeEventListener() {},
+  },
 };
-probeSandbox.globalThis = probeSandbox;
-vm.createContext(probeSandbox);
-vm.runInContext(await readFile(path.join(root, "dsh", "client.js"), "utf8"), probeSandbox, { filename: "client.js" });
-if (typeof mod.__debug_styles === "function") mod.__debug_styles();
+let ref2 = null;
+s2.window = { __ModuleLoader__: { load(r) { ref2 = r; } }, localStorage: s2.localStorage };
+s2.globalThis = s2;
+vm.createContext(s2);
+vm.runInContext(await readFile(path.join(root, "dsh", "client.js"), "utf8"), s2, { filename: "client.js" });
+if (ref2 && typeof ref2.factory === "function") {
+  const probe = ref2.factory(() => ({}));
+  if (typeof probe.__debug_styles === "function") probe.__debug_styles();
+}
 
 const css = styles.sort((a, b) => b.length - a.length)[0] || "";
+if (!css) console.warn("warning: could not capture the panel stylesheet");
 
 const page = `<!doctype html>
 <html lang="zh-CN"><meta charset="utf-8">
@@ -168,7 +215,7 @@ const page = `<!doctype html>
 </div>
 <div class="wrap" style="margin-top:20px;">
   <div class="frame"><p class="label">panel</p>
-    <div style="position:relative;transform:none;">${panelHtml}</div>
+    <div id="magpie-quota-panel" style="position:static;max-height:none;width:880px;">${panelHtml}</div>
   </div>
 </div>
 <style>${css}</style>

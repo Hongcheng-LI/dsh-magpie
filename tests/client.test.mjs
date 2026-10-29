@@ -165,6 +165,28 @@ test("subscription windows are labelled in Chinese and values sit on the right",
   assert.match(html, /×4/);
 });
 
+test("windows are ordered short → long even when Magpie lists them the other way round", () => {
+  // Zhipu GLM hands over "MCP · Month" before "5 hours"; the panel must not mirror that.
+  const html = mod.__debug_panelHtml(
+    dataState([
+      provider({
+        provider: "zhipu",
+        name: "Zhipu GLM",
+        plan: "GML Coding Plan",
+        windows: [
+          { name: "MCP · Month", used: 10, pct: 10, display: "", resetsAt: "2026-11-22T10:18:04+08:00" },
+          { name: "5 hours", used: 0, pct: 0, display: "", resetsAt: "2026-10-29T14:00:00+08:00" },
+        ],
+        worstPct: 10,
+      }),
+    ]),
+  );
+  const five = html.indexOf("5 小时用量上限");
+  const month = html.indexOf("MCP 月度限额");
+  assert.ok(five >= 0 && month >= 0, "both window labels should render");
+  assert.ok(five < month, "5 小时用量上限 must come before MCP 月度限额");
+});
+
 test("money balance accounts show the amount, credit and API-key accounts degrade gracefully", () => {
   const html = mod.__debug_panelHtml(
     dataState([

@@ -1,6 +1,6 @@
 {
   "name": "dsh-magpie",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "description": "All provider quotas and prepaid balances from your local Magpie AI gateway (127.0.0.1:3425) inside the DSH composer: per-window usage bars, remaining percent, reset countdowns, and money-balance accounts.",
   "type": "module",
   "license": "MIT",

@@ -6,6 +6,17 @@ All notable changes to this plugin are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.3.2] — 2026-10-29
+
+### Fixed
+
+- Windows always render short → long (5 小时 → 每周 → 月度) regardless of the order
+  Magpie returns them in. Zhipu GLM used to list its `MCP · Month` window above the
+  5-hour one while every other account did the opposite.
+- `scripts/preview.mjs` now feeds the panel through the real host half, so previews
+  show the same percentages as the app (it used to render every window as `—`), and
+  the panel stylesheet is actually inlined instead of silently dropped.
+
 ## [0.3.1] — 2026-10-28
 
 ### Added

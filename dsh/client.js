@@ -296,6 +296,23 @@ window.__ModuleLoader__.load({
       return s;
     }
 
+    // Magpie hands windows over in its own order — Zhipu GLM lists "MCP · Month"
+    // before "5 hours". Rank by real duration so every account reads short → long
+    // (5 小时 → 每周 → 月度), which matches how the other providers are laid out.
+    function windowRank(name) {
+      const s = String(name || "").trim().toLowerCase();
+      if (/month|月度|每月/.test(s)) return 1e5;
+      let m = s.match(/^(\d+)\s*(h|hours?)$/);
+      if (m) return Number(m[1]) * 60;
+      if (/5\s*小时/.test(s)) return 300;
+      m = s.match(/^(\d+)\s*(d|days?)$/);
+      if (m) return Number(m[1]) * 1440;
+      if (/week|周/.test(s)) return 7 * 1440;
+      if (/day|每日|每天/.test(s)) return 1440;
+      if (/credit|积分|points?/.test(s)) return 2e5;
+      return 5e4;
+    }
+
     // Reset cards: Magpie lists each card with the window it restores and its expiry
     // ("fiveHour" → 5 小时重置卡; anything else is treated as a full reset). Group by
     // kind + expiry so seven cards read as "5 小时 ×7 · 11-22 / 12-22 到期".
@@ -408,7 +425,8 @@ window.__ModuleLoader__.load({
       const headTip = [planIsNoise ? "" : planText, p.user, p.provider].filter(Boolean).join(" · ");
       let body;
       if (windows.length) {
-        body = windows.map(windowHtml).join("") + resetsHtml(p.resets);
+        body = windows.slice().sort((a, b) => windowRank(a && a.name) - windowRank(b && b.name))
+          .map(windowHtml).join("") + resetsHtml(p.resets);
       } else if (bal) {
         body = '<div class="mq-w"><span class="mq-wname">余额</span>' +
           '<span class="mq-wpct">' + esc(bal) + "</span></div>";
