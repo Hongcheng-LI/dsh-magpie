@@ -291,7 +291,7 @@ window.__ModuleLoader__.load({
       if (m) return Number(m[1]) === 7 ? "每周限额" : m[1] + " 天用量上限";
       if (/每?周|week/i.test(s)) return "每周限额";
       if (/^1\s*(d|day|24\s*hours?)$/i.test(s) || /每天|每日|daily/i.test(s)) return "每日限额";
-      if (/month|月度|每月/i.test(s)) return /mcp/i.test(s) ? "MCP 月度限额" : "月度限额";
+      if (/month|月度|每月/i.test(s)) return "月度限额";
       if (/credit|积分|points?/i.test(s)) return "额度";
       return s;
     }
@@ -349,7 +349,7 @@ window.__ModuleLoader__.load({
     // progress bar and no traffic-light colouring — the number itself is the message.
     // Raw used/limit, reset time and the exhaustion projection move into the row's
     // tooltip, so the list stays scannable and reads like a settings table.
-    function windowHtml(w) {
+    function windowHtml(w, labelOverride) {
       const pct = roundPct(w.pct);
       const tip = [];
       if (w.display) tip.push("已用 " + w.display);
@@ -360,7 +360,7 @@ window.__ModuleLoader__.load({
         const cd = fmtCountdown(w.runsOutAt);
         if (cd && cd !== "已重置") tip.push("预计 " + cd + "后耗尽");
       }
-      const label = windowLabel(w.name);
+      const label = labelOverride || windowLabel(w.name);
       const tipAll = [];
       if (w.name && w.name !== label) tipAll.push(w.name);
       tipAll.push.apply(tipAll, tip);
@@ -425,8 +425,18 @@ window.__ModuleLoader__.load({
       const headTip = [planIsNoise ? "" : planText, p.user, p.provider].filter(Boolean).join(" · ");
       let body;
       if (windows.length) {
-        body = windows.slice().sort((a, b) => windowRank(a && a.name) - windowRank(b && b.name))
-          .map(windowHtml).join("") + resetsHtml(p.resets);
+        const ordered = windows.slice()
+          .sort((a, b) => windowRank(a && a.name) - windowRank(b && b.name));
+        const labels = ordered.map((w) => windowLabel(w && w.name));
+        // Two windows of the same period would read identically ("月度限额" twice), so
+        // spell out the raw name only in that rare case.
+        const seen = new Map();
+        labels.forEach((l) => seen.set(l, (seen.get(l) || 0) + 1));
+        const finalLabels = labels.map((l, i) =>
+          seen.get(l) > 1 && ordered[i] && ordered[i].name
+            ? l + "（" + String(ordered[i].name).trim() + "）"
+            : l);
+        body = ordered.map((w, i) => windowHtml(w, finalLabels[i])).join("") + resetsHtml(p.resets);
       } else if (bal) {
         body = '<div class="mq-w"><span class="mq-wname">余额</span>' +
           '<span class="mq-wpct">' + esc(bal) + "</span></div>";

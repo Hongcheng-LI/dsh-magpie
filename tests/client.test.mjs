@@ -182,9 +182,10 @@ test("windows are ordered short → long even when Magpie lists them the other w
     ]),
   );
   const five = html.indexOf("5 小时用量上限");
-  const month = html.indexOf("MCP 月度限额");
+  const month = html.indexOf("月度限额");
   assert.ok(five >= 0 && month >= 0, "both window labels should render");
-  assert.ok(five < month, "5 小时用量上限 must come before MCP 月度限额");
+  assert.ok(five < month, "5 小时用量上限 must come before 月度限额");
+  assert.ok(!/MCP 月度限额/.test(html), "the MCP product name should not leak into the label");
 });
 
 test("money balance accounts show the amount, credit and API-key accounts degrade gracefully", () => {
