@@ -162,15 +162,19 @@ test("GET /magpie/quotas normalizes windows, balances, resets and errors", async
 
 test("GET /magpie/usage passes the period through and normalizes totals", async () => {
   canned = (url) => {
-    if (url === "http://magpie.test/v1/magpie/usage?period=7d") {
+    if (url === "http://magpie.test/v1/magpie/usage/requests?period=7d") {
       return {
         period: "7d",
+        total: 5,
         calls: 5,
         cost: 1.25,
         input: 100,
         output: 50,
         cache_read: 10,
-        models: [{ id: 1, provider: "zhipu", model: "glm-5.3-flash", calls: 5, cost: 1.25 }],
+        by: {
+          provider: [{ id: "zhipu", name: "Zhipu GLM", calls: 5, cost: 1.25, input: 100, output: 50, cache_read: 10 }],
+          agent: [{ id: "dsh", name: "dsh", calls: 5, cost: 1.25 }],
+        },
       };
     }
     throw new Error("unexpected url " + url);
@@ -184,20 +188,23 @@ test("GET /magpie/usage passes the period through and normalizes totals", async 
   assert.equal(body.totals.calls, 5);
   assert.equal(body.totals.cost, 1.25);
   assert.equal(body.totals.retried, 0, "missing numeric keys default to 0");
-  assert.equal(body.models.length, 1);
-  assert.ok(fetchLog.some((u) => u.endsWith("/v1/magpie/usage?period=7d")), "requested the 7d aggregate");
+  assert.equal(body.groups.length, 1);
+  assert.equal(body.groups[0].name, "Zhipu GLM");
+  assert.equal(body.groups[0].cost, 1.25);
+  assert.equal(body.agents[0].id, "dsh");
+  assert.ok(fetchLog.some((u) => u.endsWith("/v1/magpie/usage/requests?period=7d")), "requested the 7d request-log aggregate");
 });
 
 test("an unknown period falls back to 30d instead of shouting at Magpie", async () => {
   canned = (url) => {
-    if (url.startsWith("http://magpie.test/v1/magpie/usage?period=")) return { period: "30d", calls: 1 };
+    if (url.startsWith("http://magpie.test/v1/magpie/usage/requests?period=")) return { period: "30d", calls: 1 };
     throw new Error("unexpected url " + url);
   };
 
   const { routes } = makeKernel();
   const { body } = await call(routes.get("/magpie/usage"), { url: "/magpie/usage?period=99d" });
   assert.equal(body.period, "30d");
-  assert.ok(fetchLog.includes("http://magpie.test/v1/magpie/usage?period=30d"));
+  assert.ok(fetchLog.includes("http://magpie.test/v1/magpie/usage/requests?period=30d"));
 });
 
 test("a dead gateway degrades to ok:false with a reason rather than throwing", async () => {

@@ -150,11 +150,13 @@ window.__ModuleLoader__.load({
       return String(Math.round(n));
     }
 
+    // Usage cost is reported by Magpie in US dollars (its 用量 page shows "$"), so we
+    // format money as $ to stay identical to that page.
     function fmtMoney(n) {
       if (typeof n !== "number" || !isFinite(n)) return "—";
-      if (n === 0) return "¥0";
-      if (n < 0.01) return "<¥0.01";
-      return "¥" + n.toFixed(2);
+      if (n === 0) return "$0";
+      if (n < 0.01) return "<$0.01";
+      return "$" + n.toFixed(2);
     }
 
     function fmtInt(n) {
@@ -170,10 +172,10 @@ window.__ModuleLoader__.load({
     // Billing regimes are not comparable, so each row shows the unit its provider
     // actually settles in:
     //   • 积分        — subscription/plan accounts deduct credits (WorkBuddy, Trae…)
-    //   • ≈¥x.xx      — plan meters nothing per token, so money is an API-list-price
-    //                   estimate of what the tokens would have cost (kind plan/subscription)
-    //   • ¥x.xx       — prepaid balance accounts (kind "balance", e.g. DeepSeek) really
-    //                   deduct from the top-up, so the figure is actual spend
+    //   • $x.xx (est) — plan meters nothing per token, so money is a list-price estimate
+    //   • $x.xx (real)— prepaid balance accounts really deduct from the top-up
+    // NOTE: usageColumnHtml no longer calls this — its per-provider rows are built from
+    // the request-log groups. Kept for any external/debug caller.
     // Returns { text, tone } where tone ∈ credits|est|real|none.
     function usageValue(m, kindOf) {
       if (m.credits > 0) return { text: fmtCredits(m.credits), tone: "credits" };
@@ -258,6 +260,8 @@ window.__ModuleLoader__.load({
         "#" + PANEL_ID + " .mq-kpi b{font-size:16px;font-weight:700;font-variant-numeric:tabular-nums;",
         "white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}",
         "#" + PANEL_ID + " .mq-kpi span{font-size:14px;color:var(--dsw-alias-label-caption,#8b949e);}",
+        "#" + PANEL_ID + " .mq-kpsub{font-size:14px;font-style:normal;color:var(--dsw-alias-label-caption,#8b949e);",
+        "white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}",
         "#" + PANEL_ID + " .mq-urow{margin-top:11px;min-width:0;}",
         "#" + PANEL_ID + " .mq-utop{display:flex;align-items:baseline;gap:8px;min-width:0;}",
         "#" + PANEL_ID + " .mq-uname{font-size:16px;font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}",
@@ -549,62 +553,66 @@ window.__ModuleLoader__.load({
         );
       }
       const t = u.totals || {};
-      const kpi = (value, label) =>
-        '<div class="mq-kpi"><b title="' + esc(String(value)) + '">' + esc(String(value)) + "</b><span>" + esc(label) + "</span></div>";
-      const models = Array.isArray(u.models) ? u.models : [];
-      // Any estimated (non-prepaid) provider in the list makes the total an estimate too.
-      const anyEst = models.some((m) => m.cost > 0 && (!kindOf || kindOf(m.provider) !== "balance"));
+      const kpi = (value, label, sub, title) =>
+        '<div class="mq-kpi"><b title="' + esc(String(title == null ? value : title)) + '">' + esc(String(value)) + "</b>" +
+        "<span>" + esc(label) + "</span>" +
+        (sub ? '<i class="mq-kpsub" title="' + esc(String(sub)) + '">' + esc(String(sub)) + "</i>" : "") +
+        "</div>";
+      const groups = Array.isArray(u.groups) ? u.groups : [];
+      const tokenTotal = (t.input || 0) + (t.output || 0) + (t.cache_read || 0);
+      const hitDen = (t.input || 0) + (t.cache_read || 0);
+      const hitRate = hitDen > 0 ? Math.round(((t.cache_read || 0) / hitDen) * 100) : 0;
+      const feeText = (t.unpriced > 0 ? "≈" : "") + fmtMoney(t.cost) + (t.unpriced > 0 ? "+" : "");
       let h =
         '<div class="mq-col mq-col-u">' + head +
         '<div class="mq-kpis">' +
-        kpi((anyEst ? "≈" : "") + fmtMoney(t.cost), "折算消耗") +
-        kpi(fmtInt(t.calls), "调用") +
-        kpi(fmtTok(t.input), "输入") +
-        kpi(fmtTok(t.output), "输出") +
+        kpi(fmtTok(tokenTotal), "Token",
+          "入" + fmtTok(t.input) + "·出" + fmtTok(t.output) + "·缓存" + fmtTok(t.cache_read),
+          "本周期消耗的全部 token：输入 " + fmtTok(t.input) + " · 输出 " + fmtTok(t.output) + " · 缓存读取 " + fmtTok(t.cache_read)) +
+        kpi(fmtInt(t.calls), "请求", t.errors > 0 ? fmtInt(t.errors) + " 个失败" : "没有失败") +
+        kpi(feeText, "费用", t.unpriced > 0 ? fmtInt(t.unpriced) + " 个没有价格" : "",
+          "按官方挂牌价折算的估算费用（美元）") +
+        kpi(hitRate + "%", "缓存命中率", "占提示词") +
         "</div>";
       if (t.credits > 0) {
         h += '<div class="mq-uremain">积分消耗合计 ' + esc(fmtCredits(t.credits)) + "（订阅额度扣减，不折算成钱）</div>";
       }
-      if (!models.length) {
+      if (!groups.length) {
         h += '<div class="mq-note">这段时间还没有调用记录。</div>';
       }
       const LIMIT = 8;
-      // The source (Magpie provider) is always printed on the second line, so a model
-      // served by several accounts (glm-5.3-flash via Zhipu vs WorkBuddy) stays clear.
-      models.slice(0, LIMIT).forEach((m) => {
-        const shown = m.name || m.model || "?";
-        const src = String(m.sub || m.provider || "").split("·")[0].trim();
-        const bits = [];
-        if (src) bits.push(src);
-        bits.push(fmtInt(m.calls) + " 次");
-        if (m.input > 0) bits.push("入 " + fmtTok(m.input));
-        if (m.output > 0) bits.push("出 " + fmtTok(m.output));
-        if (m.cache_read > 0) bits.push("缓存 " + fmtTok(m.cache_read));
-        const v = usageValue(m, kindOf);
-        const vColor = v.tone === "none" ? "var(--dsw-alias-label-secondary,#8b949e)" : "var(--dsw-alias-label-primary,#e6edf3)";
-        const vTitle =
-          v.tone === "credits" ? "订阅/套餐积分计费：" + v.text
-            : v.tone === "est" ? "套餐不按 token 实扣，此处是按官方挂牌价折算的估值"
-            : v.tone === "real" ? "预充值余额实扣" : "";
+      const PROV_NAME = { "Local session": "本地会话", "local session": "本地会话", "session-unknown": "本地会话" };
+      groups.slice(0, LIMIT).forEach((g) => {
+        const rawName = g.name || g.id || "?";
+        const shown = PROV_NAME[rawName] || rawName;
+        const gtok = (g.input || 0) + (g.output || 0) + (g.cache_read || 0);
+        const gden = (g.input || 0) + (g.cache_read || 0);
+        const bits = [fmtInt(g.calls) + " 个请求"];
+        if (gtok > 0) bits.push(fmtTok(gtok) + " token");
+        if (gden > 0 && (g.cache_read || 0) > 0) bits.push("缓存 " + Math.round(((g.cache_read || 0) / gden) * 100) + "%");
+        let vText, vTone, vTitle;
+        if (g.credits > 0) {
+          vText = fmtCredits(g.credits); vTone = "credits"; vTitle = "订阅/套餐积分计费：" + vText;
+        } else if (g.cost > 0) {
+          vText = fmtMoney(g.cost); vTone = "est"; vTitle = "按官方挂牌价折算的估算费用（美元）";
+        } else {
+          vText = fmtInt(g.calls) + " 次"; vTone = "none"; vTitle = "";
+        }
+        const vColor = vTone === "none" ? "var(--dsw-alias-label-secondary,#8b949e)" : "var(--dsw-alias-label-primary,#e6edf3)";
         h +=
           '<div class="mq-urow">' +
           '<div class="mq-utop">' +
-          '<span class="mq-uname" title="' + esc(shown + (src ? " · " + src : "")) + '">' + esc(shown) + "</span>" +
+          '<span class="mq-uname" title="' + esc(shown) + '">' + esc(shown) + "</span>" +
           '<span class="mq-unum" title="' + esc(vTitle) + '" style="color:' + vColor + '">' +
-          esc(v.text) + "</span>" +
+          esc(vText) + "</span>" +
           "</div>" +
           '<div class="mq-usub" title="' + esc(bits.join(" · ")) + '">' + esc(bits.join(" · ")) + "</div>" +
           "</div>";
       });
-      if (models.length > LIMIT) {
-        h += '<div class="mq-note">还有 ' + (models.length - LIMIT) + " 个模型未列出</div>";
+      if (groups.length > LIMIT) {
+        h += '<div class="mq-note">还有 ' + (groups.length - LIMIT) + " 个来源未列出</div>";
       }
-      if (t.unpriced > 0) {
-        h += '<div class="mq-note">其中 ' + fmtInt(t.unpriced) + " 次调用没有价格（走订阅积分），不计入消耗金额。</div>";
-      }
-      if (anyEst) {
-        h += '<div class="mq-note">≈ 挂牌价折算（套餐不实扣）· 积分 订阅额度消耗 · ¥ 预充值实扣</div>';
-      }
+      h += '<div class="mq-note">费用为挂牌价折算（美元）· 积分 为订阅额度消耗 · 统计口径含本地会话与全部供应商，与 Magpie 用量页一致</div>';
       return h + "</div>";
     }
 
@@ -849,7 +857,7 @@ window.__ModuleLoader__.load({
       }
       const usageTip =
         state.usage && state.usage.ok === true && state.usage.totals
-          ? (USAGE_LABEL[state.usage.period || "30d"] || state.usage.period) + " 折算 " + fmtMoney(state.usage.totals.cost) + " / " + fmtInt(state.usage.totals.calls) + " 次调用 · "
+          ? (USAGE_LABEL[state.usage.period || "30d"] || state.usage.period) + " 费用 " + fmtMoney(state.usage.totals.cost) + " / " + fmtInt(state.usage.totals.calls) + " 次请求 · "
           : "";
       const tooltip = state.error
         ? "连不上 Magpie (" + state.error + ")"

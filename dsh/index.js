@@ -222,33 +222,34 @@ const USAGE_NUM_KEYS = [
   "reasoning", "cost", "credits", "credited", "unpriced", "timed",
 ];
 
-// Magpie's usage log aggregate (/v1/magpie/usage): 30-day totals plus per-model
-// breakdown. The client shows the per-model numbers on the left half of the card
-// (用量) and the quota list on the right (额度).
+// Magpie's request-log aggregate (/v1/magpie/usage/requests): this is the SAME view
+// Magpie's 用量 dashboard renders. Unlike /v1/magpie/usage (gateway-reported calls
+// only, ~236/day), the request log rolls up EVERY logged call — including the
+// "local session" (session-unknown) calls the harness itself makes — so its totals
+// line up with the numbers a user sees in Magpie. The response carries the whole
+// period's aggregate at the top level plus ready-made `by.provider` / `by.agent` /
+// `by.model` groupings, so no client-side pagination or re-aggregation is needed.
 function normalizeUsage(body) {
-  const models = Array.isArray(body && body.models) ? body.models : [];
-  const rows = models.map((m) => {
-    const nums = pickNumbers(m, USAGE_NUM_KEYS);
-    return Object.assign(
-      {
-        id: m && m.id,
-        provider: m && m.provider,
-        model: m && m.model,
-        name: (m && m.name) || (m && m.model) || "?",
-        sub: m && m.sub,
-      },
-      nums
-    );
-  });
-  rows.sort((a, b) => (b.cost - a.cost) || (b.credits - a.credits) || (b.calls - a.calls));
+  const by = (body && body.by) || {};
+  const groups = Array.isArray(by.provider)
+    ? by.provider.map((p) =>
+        Object.assign(
+          { id: p && p.id, name: (p && p.name) || (p && p.id) || "?", icon: p && p.icon },
+          pickNumbers(p, USAGE_NUM_KEYS)
+        )
+      )
+    : [];
+  groups.sort((a, b) => (b.cost - a.cost) || (b.credits - a.credits) || (b.calls - a.calls));
+  const agents = Array.isArray(by.agent)
+    ? by.agent.map((a) => Object.assign({ id: a && a.id, name: a && a.name, icon: a && a.icon }, pickNumbers(a, USAGE_NUM_KEYS)))
+    : [];
   return {
     period: (body && body.period) || "30d",
     since: body && body.since,
     totals: pickNumbers(body, USAGE_NUM_KEYS),
-    models: rows,
-    agents: Array.isArray(body && body.agents)
-      ? body.agents.map((a) => Object.assign({ id: a && a.id, name: a && a.name, icon: a && a.icon }, pickNumbers(a, USAGE_NUM_KEYS)))
-      : [],
+    groups,
+    agents,
+    models: [], // kept for payload-shape compatibility; the list is now `groups`
   };
 }
 
@@ -306,12 +307,15 @@ export function apply(ctx) {
   const disposeTimer = ctx.timer.interval(warm, WARM_INTERVAL_MS);
   ctx.timer.timeout(warm, 150);
 
-  // ---- usage half (per-model 用量) ------------------------------------------
-  // Every tab talks to Magpie's own aggregate endpoint with the same period param
-  // Magpie's dashboard uses, so our numbers match its 用量 page exactly. The 当天 tab
-  // maps to Magpie's native "today" period (a single payload carrying both the top-line
-  // totals and the per-provider/model breakdown). No manual request-log walking: that
-  // produced a different total than Magpie's dashboard and is no longer needed.
+  // ---- usage half (按供应商用量) --------------------------------------------
+  // Every tab talks to Magpie's own REQUEST-LOG aggregate endpoint
+  // (/v1/magpie/usage/requests) with the same period param its 用量 dashboard uses,
+  // so our numbers match that page exactly. That endpoint returns the whole period's
+  // aggregate at the top level plus `by.provider`/`by.agent`/`by.model` groupings, so
+  // no manual pagination or re-aggregation is needed. The 当天 tab maps to Magpie's
+  // native "today" period. (The older /v1/magpie/usage endpoint only counts
+  // gateway-reported calls and omitted local-session traffic, so it under-counted by
+  // ~2–5×; it is no longer used.)
   const USAGE_PERIODS = new Set(["1d", "7d", "30d", "all"]);
   const MAGPIE_PERIOD = { "1d": "today", "7d": "7d", "30d": "30d", all: "all" };
   const usageCaches = new Map(); // period -> { at, payload }
@@ -322,7 +326,7 @@ export function apply(ctx) {
     const hit = usageCaches.get(p);
     if (!force && hit && now - hit.at < USAGE_TTL_MS) return hit.payload;
     const norm = normalizeUsage(
-      await fetchJson(ctx, base + "/v1/magpie/usage?period=" + encodeURIComponent(MAGPIE_PERIOD[p]))
+      await fetchJson(ctx, base + "/v1/magpie/usage/requests?period=" + encodeURIComponent(MAGPIE_PERIOD[p]))
     );
     const payload = Object.assign({ ok: true, base, fetchedAt: new Date().toISOString() }, norm, { period: p });
     usageCaches.set(p, { at: Date.now(), payload });

@@ -19,6 +19,7 @@ import vm from "node:vm";
 const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(here, "..");
 const outFile = path.resolve(process.argv[2] || path.join(root, "preview.html"));
+const PERIOD = process.env.PREVIEW_PERIOD || "30d";
 const BASE = (process.env.MAGPIE_URL || "http://127.0.0.1:3425").replace(/\/+$/, "");
 
 async function getJson(url) {
@@ -140,7 +141,7 @@ let payload;
 let usage;
 let offline = null;
 try {
-  const host = await hostPayload("30d");
+  const host = await hostPayload(PERIOD);
   payload = host.quotas;
   usage = host.usage;
 } catch (err) {
@@ -149,7 +150,7 @@ try {
   usage = { ok: false, message: offline, totals: {}, models: [] };
 }
 
-const state = { data: payload, usage, error: offline, loading: false, loadedAt: Date.now(), usagePeriod: "30d" };
+const state = { data: payload, usage, error: offline, loading: false, loadedAt: Date.now(), usagePeriod: PERIOD };
 const panelHtml = mod.__debug_panelHtml(state);
 
 // ensureStyles() writes the whole stylesheet into a <style> node's textContent, but only

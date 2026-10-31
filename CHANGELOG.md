@@ -8,12 +8,17 @@ All notable changes to this plugin are recorded here. The format follows
 
 ### Changed
 
-- The 当天 tab of the usage panel now reads Magpie's own `period=today` aggregate
-  endpoint (which returns both the top-line totals and the per-provider/model
-  breakdown in one payload), instead of walking the raw request log by hand and
-  re-aggregating. The two numbers previously disagreed because the log walk counted
-  failed/retry and unpriced requests differently from Magpie's dashboard; now the
-  plugin matches the dashboard exactly.
+- The usage column now reads Magpie's **request-log aggregate**
+  (`/v1/magpie/usage/requests`) — the exact endpoint its own 用量 dashboard renders.
+  The previous `/v1/magpie/usage` endpoint only counted gateway-reported calls, so it
+  omitted the "local session" (`session-unknown`) traffic the harness makes and
+  under-reported by ~2–5×. Totals now line up with the Magpie page.
+- The usage panel mirrors the Magpie 用量 page: four headline cards — **Token**
+  (输入/输出/缓存), **请求** (含失败数), **费用** (美元挂牌价折算, `≈` when some calls are
+  unpriced), **缓存命中率** — followed by a per-**provider** breakdown (本地会话, plus
+  each connected provider). Cost is shown in `$` to match Magpie (it used to be `¥`).
+- The per-period tabs (当天/7天/30天/全部) all use the same endpoint with Magpie's own
+  period param, so every tab matches the corresponding Magpie view.
 
 ## [0.3.3] — 2026-10-29
 
